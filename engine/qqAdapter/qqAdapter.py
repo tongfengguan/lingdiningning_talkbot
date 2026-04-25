@@ -16,6 +16,7 @@ router = APIRouter(prefix="/qq")
 memory = MemoryManager()
 
 async def send_msg(user_id, message):
+    """发送文字和图片消息"""
     img_dir = os.path.abspath("assets/images")
     tags = re.findall(r"\[表情:\s*(.*?)\]", message)
     processed = message
@@ -42,39 +43,33 @@ async def webhook(request: Request):
     if data.get("post_type") != "message" or data.get("message_type") != "private":
         return {"status": "ignored"}
 
-    user_id = str(data.get("user_id", ""))
-    raw_message = data.get("raw_message", "").strip()
+    user_id, raw_message = str(data.get("user_id", "")), data.get("raw_message", "").strip()
     user_name = data.get("sender", {}).get("nickname", "宝贝")
     
     if not raw_message and not user_id: return {"status": "ignored"}
     logger.info(f"[QQ] {user_name}({user_id}): {raw_message}")
 
-    # --- 图片 URL 提取 ---
+    # 图片提取
     image_url = None
     img_match = re.search(r"\[CQ:image,.*?url=(.*?)\]", raw_message)
     if img_match:
         image_url = img_match.group(1).replace("&amp;", "&")
-        # 清洗消息内容，把 CQ 码去掉，方便 AI 处理纯文字
         clean_message = re.sub(r"\[CQ:image,.*?\]", "", raw_message).strip()
     else:
         clean_message = raw_message
 
-    # 指令：学图
+    # 指令处理
     if "/学这个" in raw_message and image_url:
-        name_match = re.search(r"/学这个\s*(.*)", clean_message)
-        name = name_match.group(1).strip() if name_match else "未命名"
-        await download_image(image_url, name)
+        await download_image(image_url, re.search(r"/学这个\s*(.*)", clean_message).group(1).strip() or "未命名")
         asyncio.create_task(send_msg(int(user_id), f"(拨弄发尾) 哼，这种表情我记住了。"))
         return {"status": "ok"}
 
-    # 其他指令
     if clean_message == "/清除记忆":
         memory.clear(user_id)
         asyncio.create_task(send_msg(int(user_id), "记忆清空了哦。"))
     elif clean_message.startswith("/cf "):
         asyncio.create_task(send_msg(int(user_id), await get_cf_info(clean_message[4:].strip())))
     else:
-        # 调用支持图片的 AI 聊天
         asyncio.create_task(_reply(user_id, user_name, clean_message, int(user_id), image_url))
     return {"status": "ok"}
 

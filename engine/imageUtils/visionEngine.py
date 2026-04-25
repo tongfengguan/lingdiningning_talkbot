@@ -5,10 +5,9 @@ from loguru import logger
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 
 async def analyze_image(image_url):
-    """调用阿里 Qwen-VL 模型分析图片"""
+    """调用 Qwen-VL 分析图片，重点识别文字和情绪梗"""
     if not DASHSCOPE_API_KEY:
-        logger.warning("未配置 DASHSCOPE_API_KEY，视觉分析跳过。")
-        return "（宁宁没带眼镜，看不清图里的细节，只能猜个大概）"
+        return "（宁宁没带眼镜，看不清细节）"
 
     url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
     headers = {
@@ -24,7 +23,7 @@ async def analyze_image(image_url):
                     "role": "user",
                     "content": [
                         {"image": image_url},
-                        {"text": "请简要描述这张图片的内容，如果是代码请提取关键信息，如果是人物请描述神态。"}
+                        {"text": "这是一张QQ聊天中的图片或表情包。请识别并描述图中的所有文字、主体动作及神态，并概括这张图想表达的'梗'或情绪。回复需简练。"}
                     ]
                 }
             ]
@@ -40,4 +39,4 @@ async def analyze_image(image_url):
             return description
     except Exception as e:
         logger.error(f"视觉分析出错: {e}")
-        return "（图里有一层迷雾，宁宁看不清呢）"
+        return "（刚才眼睛花了一下，没看清那张图的内容呢）"

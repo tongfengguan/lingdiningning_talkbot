@@ -10,7 +10,7 @@ def send_email_to_user(subject, content, to_email):
     
     msg = MIMEText(content, 'plain', 'utf-8')
     msg['From'] = formataddr((Header(config.BOT_NAME, 'utf-8').encode(), config.SMTP_USER))
-    msg['To'] = formataddr((Header("柊史", 'utf-8').encode(), to_email))
+    msg['To'] = formataddr((Header("看看", 'utf-8').encode(), to_email))
     msg['Subject'] = Header(subject, 'utf-8').encode()
 
     for port, use_ssl in [(465, True), (587, False)]:

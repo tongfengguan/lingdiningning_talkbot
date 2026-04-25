@@ -8,6 +8,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from config import config
 from engine.qqAdapter.qqAdapter import router as qq_router, send_msg
 from engine.aiEngine.aiEngine import ai
+from engine.biliEngine.biliEngine import get_bili_popular
+from engine.dashboard.dashboard import router as dashboard_router
 
 # --- 屏蔽 Windows asyncio 的 10054 报错噪音 ---
 import sys
@@ -27,6 +29,7 @@ logger.add("logs/bot_{time:YYYY-MM-DD}.log", rotation="1 day", retention="7 days
 
 app = FastAPI()
 app.include_router(qq_router)
+app.include_router(dashboard_router)
 
 ADMIN_QQ = int(os.getenv("ADMIN_QQ", 0))
 
@@ -42,6 +45,23 @@ async def proactive_message():
     await send_msg(ADMIN_QQ, msg)
     logger.info(f"Proactive push to {ADMIN_QQ}")
 
+async def bilibili_trending_push():
+    if not ADMIN_QQ: return
+    logger.info("Fetching Bilibili trending videos for push...")
+    videos = await get_bili_popular(limit=3)
+    if not videos:
+        return
+    
+    video_info = "\n".join([f"- {v['title']} (UP: {v['author']})\n  链接: {v['url']}" for v in videos])
+    
+    # 让宁宁对这些视频进行点评
+    prompt = f"这是B站现在的热门视频列表：\n{video_info}\n请以你绫地宁宁的人设，挑选其中一个你觉得感兴趣（或者觉得对方会感兴趣）的视频，用你那招牌的高冷吐槽风格发给对方。记得带上视频链接。"
+    
+    # 使用 chat 方法，但传入特殊指令
+    reply = await ai.chat(str(ADMIN_QQ), "看看", prompt)
+    await send_msg(ADMIN_QQ, reply)
+    logger.info(f"Bilibili trending push to {ADMIN_QQ}")
+
 @app.on_event("startup")
 async def startup():
     logger.info(f"🌸 {config.BOT_NAME} Started on {config.BOT_PORT}")
@@ -49,8 +69,12 @@ async def startup():
     asyncio.create_task(ai.sync_all())
     
     scheduler = AsyncIOScheduler()
+    # 每隔 4 小时随机尝试骚扰你一下
     scheduler.add_job(proactive_message, 'cron', hour='10,14,18,22', minute='30')
+    # 每天下午 6 点推送 B 站热门 (或者你可以改时间)
+    scheduler.add_job(bilibili_trending_push, 'cron', hour='18', minute='00')
     scheduler.start()
+    logger.info("⏰ Scheduler started with Bilibili push task")
 
 if __name__ == "__main__":
     # 使用较轻量级的配置运行
